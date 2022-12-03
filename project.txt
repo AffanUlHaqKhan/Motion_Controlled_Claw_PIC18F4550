@@ -1,0 +1,506 @@
+;******************************************************************************
+;   This file is a basic template for assembly code for a PIC18F4550. Copy    *
+;   this file into your project directory and modify or add to it as needed.  *
+;                                                                             *
+;   The PIC18FXXXX architecture allows two interrupt configurations. This     *
+;   template code is written for priority interrupt levels and the IPEN bit   *
+;   in the RCON register must be set to enable priority levels. If IPEN is    *
+;   left in its default zero state, only the interrupt vector at 0x008 will   *
+;   be used and the WREG_TEMP, BSR_TEMP and STATUS_TEMP variables will not    *
+;   be needed.                                                                *
+;                                                                             *
+;   Refer to the MPASM User's Guide for additional information on the         *
+;   features of the assembler.                                                *
+;                                                                             *
+;   Refer to the PIC18FXX50/XX55 Data Sheet for additional                    *
+;   information on the architecture and instruction set.                      *
+;                                                                             *
+;******************************************************************************
+;                                                                             *
+;    Filename:                                                                *
+;    Date:                                                                    *
+;    File Version:                                                            *
+;                                                                             *
+;    Author:                                                                  *
+;    Company:                                                                 *
+;                                                                             * 
+;******************************************************************************
+;                                                                             *
+;    Files required: P18F4550.INC                                             *
+;                                                                             *
+;******************************************************************************
+
+	LIST P=18F4550, F=INHX32	;directive to define processor
+	#include <P18F4550.INC>	;processor specific variable definitions
+
+;******************************************************************************
+;Configuration bits
+;Microchip has changed the format for defining the configuration bits, please 
+;see the .inc file for futher details on notation.  Below are a few examples.
+
+
+
+;   Oscillator Selection:
+    	CONFIG FOSC = INTOSCIO_EC
+		CONFIG FCMEN = OFF
+		CONFIG BORV = 3
+		CONFIG WDT = OFF
+		CONFIG CPB = OFF
+		CONFIG CPD = OFF
+
+;******************************************************************************
+;Variable definitions
+; These variables are only needed if low priority interrupts are used. 
+; More variables may be needed to store other special function registers used
+; in the interrupt routines.
+
+		UDATA
+
+WREG_TEMP	RES	1	;variable in RAM for context saving 
+STATUS_TEMP	RES	1	;variable in RAM for context saving
+BSR_TEMP	RES	1	;variable in RAM for context saving
+
+
+		UDATA_ACS
+
+EXAMPLE		RES	1	;example of a variable in access RAM
+
+;******************************************************************************
+;EEPROM data
+; Data to be programmed into the Data EEPROM is defined here
+
+
+DATA_EEPROM	CODE	0xf00000
+
+		DE	"Test Data",0,1,2,3,4,5
+
+;******************************************************************************
+;Reset vector
+; This code will start executing when a reset occurs.
+
+RESET_VECTOR	CODE	0x0000
+
+		goto	Main		;go to start of main code
+
+;******************************************************************************
+;High priority interrupt vector
+; This code will start executing when a high priority interrupt occurs or
+; when any interrupt occurs if interrupt priorities are not enabled.
+
+HI_INT_VECTOR	CODE	0x0008
+
+		bra	HighInt		;go to high priority interrupt routine
+
+;******************************************************************************
+;Low priority interrupt vector and routine
+; This code will start executing when a low priority interrupt occurs.
+; This code can be removed if low priority interrupts are not used.
+
+LOW_INT_VECTOR	CODE	0x0018
+
+		bra	LowInt		;go to low priority interrupt routine
+
+;******************************************************************************
+;High priority interrupt routine
+; The high priority interrupt code is placed here to avoid conflicting with
+; the low priority interrupt vector.
+
+
+		CODE
+
+HighInt:
+
+;	*** high priority interrupt code goes here ***
+
+
+		retfie	FAST
+
+;******************************************************************************
+;Low priority interrupt routine
+; The low priority interrupt code is placed here.
+; This code can be removed if low priority interrupts are not used.
+
+LowInt:
+		movff	STATUS,STATUS_TEMP	;save STATUS register
+		movff	WREG,WREG_TEMP		;save working register
+		movff	BSR,BSR_TEMP		;save BSR register
+
+;	*** low priority interrupt code goes here ***
+
+
+		movff	BSR_TEMP,BSR		;restore BSR register
+		movff	WREG_TEMP,WREG		;restore working register
+		movff	STATUS_TEMP,STATUS	;restore STATUS register
+		retfie
+
+;******************************************************************************
+;Start of main program
+; The main program code is placed here.
+
+Main:
+		BCF TRISD,0
+		BCF TRISD,1
+		BCF TRISD,2	
+		BCF TRISC,0
+		loc1 	EQU 0x40		
+		loc2 	EQU 0x41
+		loc3 	EQU 0x42
+		loc4 	EQU 0x43
+		loc5 	EQU 0x44
+		loc6 	EQU 0x45
+		BSF TRISA,0
+		BSF TRISA,1
+		BSF TRISB,0
+		MOVLW B'00100111'
+		MOVWF ADCON1
+		MOVLW B'10110100'
+		MOVWF ADCON2
+adc1:	MOVLW B'00000001'	;Set Channel to AN0
+		MOVWF ADCON0	
+		BSF ADCON0,GO
+HOLD1: 	BTFSC ADCON0,DONE	;Get Input on AN0
+		GOTO HOLD1
+		MOVF ADRESL, W
+		MOVWF loc1 			;Store AN0 value at loc1
+		MOVLW 0x01
+		MOVWF loc2
+		MOVLW B'00000101'	;Set Channel to AN1
+		MOVWF ADCON0
+		BSF ADCON0,GO
+HOLD2:	BTFSC ADCON0,DONE	;Get Input Value on AN1
+		GOTO HOLD2
+		MOVF ADRESL, W
+		MOVWF loc3 			;Store AN1 value at loc2
+		MOVLW 0x01
+		MOVWF loc4
+		MOVLW B'00010001'	;Set Channel to AN4
+		MOVWF ADCON0
+		BSF ADCON0,GO
+HOLD3:	BTFSC ADCON0,DONE	;Get Input Value on AN4
+		GOTO HOLD3
+		MOVF ADRESL, W
+		MOVWF loc5 			;Store AN1 value at loc5
+		MOVLW 0x01
+		MOVWF loc6
+;Checking if button Pressed on RB0
+		BTFSS PORTB,0
+		goto BT
+		CALL NINETY_DEGREE_BT
+		GOTO COMPARE
+BT:		CALL ZERO_DEGREE_BT
+		
+COMPARE:
+;comparing for AN0
+	MOVLW 0x01
+	CPFSEQ loc2
+	GOTO NEXT1
+	MOVLW 0x14				;Value of 1.35 volts
+	CPFSLT loc1				;See if AN0 value < 1.35v
+	GOTO z1
+	GOTO LED1
+z1:	MOVLW 0x5C				;Value of 1.7 volts
+	CPFSGT loc1				;See if value > 1.7v
+	GOTO NEXT1
+	GOTO LED2
+LED1:CALL FULL_DEGREE2
+	GOTO NEXT1
+LED2:CALL ZERO_DEGREE2
+	GOTO NEXT1
+
+NEXT1:
+;comparing for AN4
+	MOVLW 0x01
+	CPFSEQ loc6
+	GOTO NEXT
+	MOVLW 0x29				;Value of 1.45 volts
+	CPFSLT loc5				;See if AN0 value < 1.45v
+	GOTO z3
+	GOTO LED5
+z3:	MOVLW 0x8F				;Value of 1.9 volts
+	CPFSGT loc5				;See if value > 1.9v
+	GOTO NEXT
+	GOTO LED6
+LED5:CALL NINETY_DEGREE3
+	GOTO NEXT
+LED6:CALL ZERO_DEGREE3
+	GOTO NEXT
+
+;comparing for AN1
+NEXT:
+	MOVLW 0x01
+	CPFSEQ loc4
+	GOTO DO_NOTHING
+	MOVLW 0x14
+	CPFSLT loc3
+	GOTO z2
+	GOTO LED3
+z2:	MOVLW 0x5C
+	CPFSGT loc3
+	GOTO DO_NOTHING
+	GOTO LED4
+LED3:CALL FULL_DEGREE1
+	GOTO adc1
+LED4:CALL ZERO_DEGREE1
+	GOTO adc1
+
+;Does Nothing
+DO_NOTHING: GOTO adc1
+
+;Zero Degree Rotation for Servo on PortD
+ZERO_DEGREE1
+BSF PORTD,0
+CALL Delay800us
+BCF PORTD,0
+CALL Delay1ms				;Could be done better using a loop.
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+;Zero Degree Rotation for Servo on PortC
+ZERO_DEGREE2
+BSF PORTC,0
+CALL Delay800us
+BCF PORTC,0
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+;Zero Degree Rotation for Servo on PortD Pin1
+ZERO_DEGREE3
+BSF PORTD,1
+CALL Delay800us
+BCF PORTD,1
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+;Zero Degree Rotation for Servo on PortC Pin1
+ZERO_DEGREE_BT
+BSF PORTD,2
+CALL Delay1_5ms
+BCF PORTD,2
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+;90 Degree Rotation for Servo on PortD Pin1
+NINETY_DEGREE3
+BSF PORTD,1
+CALL Delay1_5ms
+BCF PORTD,1
+CALL Delay1_5ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+;90 Degree Rotation for Servo on PortC Pin1
+NINETY_DEGREE_BT
+BSF PORTD,2
+CALL Delay1ms
+CALL Delay1ms
+BCF PORTD,2
+CALL Delay1_5ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+;180 Degree Rotation for Servo on PortD
+FULL_DEGREE1
+BSF PORTD,0
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay800us
+BCF PORTD,0
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+;180 Degree Rotation for Servo on PortC
+FULL_DEGREE2
+BSF PORTC,0
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay800us
+BCF PORTC,0
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+;180 Degree Rotation for Servo on PortD Pin1
+FULL_DEGREE3
+BSF PORTD,1
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay800us
+BCF PORTD,1
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+CALL Delay1ms
+RETURN
+
+
+;Delay Routine of exact 1ms on 16Mhz oscillator
+Delay1ms
+MOVLW d'100'
+L1: DECF WREG,W
+	BNZ L1
+	return
+
+;Delay Routine of exact 1.5ms on 16Mhz oscillator
+Delay1_5ms
+MOVLW d'125'
+L2: DECF WREG,W
+	BNZ L2
+	return
+
+;Delay Routine of exact 800us on 16Mhz oscillator
+Delay800us
+MOVLW d'50'
+L3: DECF WREG,W
+	BNZ L3
+	return
+
+;******END OF PROGRAM******
+
+END
